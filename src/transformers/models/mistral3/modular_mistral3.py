@@ -230,6 +230,27 @@ class Mistral3Model(LlavaModel):
 
 
 class Mistral3ForConditionalGeneration(LlavaForConditionalGeneration):
+    def tie_weights(self):
+        """
+        Tie lm_head weights to the language model input embeddings.
+
+        Ministral-3 checkpoints intentionally omit lm_head.weight because it should be tied.
+        However, embeddings live under `model.language_model.embed_tokens`, which the base
+        Llava tying logic does not resolve. Without this override, lm_head is randomly
+        initialized, corrupting logits and generation.
+        """
+        super().tie_weights()
+
+        try:
+            embed = self.model.language_model.embed_tokens
+            if (
+                hasattr(self, "lm_head")
+                and embed.weight.shape == self.lm_head.weight.shape
+            ):
+                self._tie_or_clone_weights(self.lm_head, embed)
+        except Exception:
+            pass
+
     def get_image_features(
         self,
         pixel_values: torch.FloatTensor,
